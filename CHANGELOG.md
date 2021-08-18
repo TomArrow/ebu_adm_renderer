@@ -4,6 +4,7 @@
 
 ### Fixed
 - Depth and height parameters were switched in metadata conversion. See 01ba2e7.
+- Bug in channel lock priority order, which controls the loudspeaker selection when the object position is the same distance from multiple loudspeakers. See 2bca5de and c628e98.
 
 ## [2.0.0] - 2019-05-22
 
