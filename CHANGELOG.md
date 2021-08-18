@@ -5,6 +5,17 @@
 ### Fixed
 - Depth and height parameters were switched in metadata conversion. See 01ba2e7.
 - Bug in channel lock priority order, which controls the loudspeaker selection when the object position is the same distance from multiple loudspeakers. See 2bca5de and c628e98.
+- Screen scaling now fails explicitly in cases where it was not well-defined before, generally with extreme positions and sizes. See f26f304 and 214eb36.
+- Errors with gaps at the start of metadata. See 4d3ef78.
+- Rounding of times in XML writer. See 5618893.
+- `audioStreamFormat` referencing error messages. See 34b738a and 04533fc.
+
+### Changed
+- `DirectSpeakers` panner uses allocentric panning for Cartesian positions. See 222374a.
+- Removed python 2.7 support.
+
+### Added
+- `loudnessMetadata` data structures, parsing and generation
 
 ## [2.0.0] - 2019-05-22
 
