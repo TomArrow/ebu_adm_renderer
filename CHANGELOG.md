@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased Changes
+
+### Fixed
+- Depth and height parameters were switched in metadata conversion. See 01ba2e7.
+
 ## [2.0.0] - 2019-05-22
 
 Changes for ITU ADM renderer reference code.
