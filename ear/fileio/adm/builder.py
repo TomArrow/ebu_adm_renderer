@@ -8,6 +8,7 @@ from .elements import (
     AudioTrackFormat,
     AudioTrackUID,
     AudioStreamFormat,
+    AudioBlockFormatHoa,
 )
 
 
@@ -17,6 +18,34 @@ class _Default(object):
 
 
 DEFAULT = _Default()
+
+
+def _make_format_property(attribute):
+    """Make a property which forwards gets/sets to format.attribute."""
+
+    def getter(self):
+        return getattr(self.format, attribute)
+
+    def setter(self, new_val):
+        return setattr(self.format, attribute, new_val)
+
+    return property(getter, setter, doc=f"accessor for format.{attribute}")
+
+
+def _make_singlar_property(attribute, attribute_singular):
+    """Make a property which forwards gets/sets attribute,
+    assuming it is a list with a single entry.
+    """
+
+    def getter(self):
+        items = getattr(self, attribute)
+        assert len(items) == 1, f"expected 1 {attribute_singular}, got {len(items)}"
+        return items[0]
+
+    def setter(self, new_val):
+        return setattr(self, attribute, [new_val])
+
+    return property(getter, setter, doc=f"singular accessor for {attribute}")
 
 
 @attrs
@@ -222,26 +251,115 @@ class ADMBuilder(object):
         return track_uid
 
     @attrs
-    class MonoItem(object):
-        """Structure referencing the ADM components created as part of a mono item.
+    class Format(object):
+        """Structure referencing the ADM components of a format with a
+        particular channel layout.
 
         Attributes:
-            channel_format (AudioChannelFormat)
-            track_format (AudioTrackFormat)
+            channel_formats (list[AudioChannelFormat])
+            track_formats (list[AudioTrackFormat])
             pack_format (AudioPackFormat)
-            stream_format (AudioStreamFormat)
-            track_uid (AudioTrackUID)
+            stream_formats (list[AudioStreamFormat])
+        """
+
+        channel_formats = attrib()
+        track_formats = attrib()
+        pack_format = attrib()
+        stream_formats = attrib()
+
+        channel_format = _make_singlar_property("channel_formats", "channel_format")
+        track_format = _make_singlar_property("track_formats", "track_format")
+        stream_format = _make_singlar_property("stream_formats", "stream_format")
+
+    @attrs
+    class Item(object):
+        """Structure referencing the ADM components created as part of a multichannel item.
+
+        Attributes:
+            format (Format)
+            track_uids (list[AudioTrackUID])
             audio_object (AudioObject)
             parent (Union[AudioContent, AudioObject])
         """
 
-        channel_format = attrib()
-        track_format = attrib()
-        pack_format = attrib()
-        stream_format = attrib()
-        track_uid = attrib()
+        format = attrib()
+        track_uids = attrib()
         audio_object = attrib()
         parent = attrib()
+
+        track_uid = _make_singlar_property("track_uids", "track_uid")
+
+        channel_formats = _make_format_property("channel_formats")
+        track_formats = _make_format_property("track_formats")
+        pack_format = _make_format_property("pack_format")
+        stream_formats = _make_format_property("stream_formats")
+
+        channel_format = _make_format_property("channel_format")
+        track_format = _make_format_property("track_format")
+        stream_format = _make_format_property("stream_format")
+
+    MonoItem = Item
+    """compatibility alias for users expecting \\*_mono to return MonoItem"""
+
+    def create_format_mono(
+        self,
+        type,
+        name,
+        block_formats=[],
+    ):
+        """Create ADM components needed to represent a mono format.
+
+        Args:
+            type (TypeDefinition): type of channelFormat and packFormat
+            name (str): name used for all components
+            block_formats (list[AudioBlockFormat]): block formats to add to
+                the channel format
+
+        Returns:
+            Format: the created components
+        """
+        format = self.create_format_multichannel(
+            type=type,
+            name=name,
+            block_formats=[block_formats],
+        )
+
+        self.last_pack_format = format.pack_format
+        self.last_stream_format = format.stream_format
+
+        return format
+
+    def create_item_mono_from_format(
+        self,
+        format,
+        track_index,
+        name,
+        parent=DEFAULT,
+    ):
+        """Create ADM components needed to represent a mono channel given an
+        existing format.
+
+        Args:
+            format (Format)
+            track_index (int): zero-based index of the track in the BWF file.
+            name (str): name used for all components
+            parent (Union[AudioContent, AudioObject]): parent of the created audioObject
+                defaults to the last content or explicitly created object
+
+        Returns:
+            Item: the created components
+        """
+        item = self.create_item_multichannel_from_format(
+            format=format,
+            track_indices=[track_index],
+            name=name,
+            parent=parent,
+        )
+
+        self.last_pack_format = item.pack_format
+        self.last_stream_format = item.stream_format
+
+        return item
 
     def create_item_mono(
         self, type, track_index, name, parent=DEFAULT, block_formats=[]
@@ -259,66 +377,20 @@ class ADMBuilder(object):
                 the channel format
 
         Returns:
-            MonoItem: the created components
+            Item: the created components
         """
-        channel_format = AudioChannelFormat(
-            audioChannelFormatName=name, type=type, audioBlockFormats=block_formats
-        )
-        self.adm.addAudioChannelFormat(channel_format)
-
-        pack_format = AudioPackFormat(
-            audioPackFormatName=name,
+        item = self.create_item_multichannel(
             type=type,
-            audioChannelFormats=[channel_format],
-        )
-        self.adm.addAudioPackFormat(pack_format)
-
-        stream_format = AudioStreamFormat(
-            audioStreamFormatName=name,
-            format=FormatDefinition.PCM,
-            audioChannelFormat=channel_format,
-        )
-        self.adm.addAudioStreamFormat(stream_format)
-
-        track_format = AudioTrackFormat(
-            audioTrackFormatName=name,
-            audioStreamFormat=stream_format,
-            format=FormatDefinition.PCM,
-        )
-        self.adm.addAudioTrackFormat(track_format)
-
-        track_uid = AudioTrackUID(
-            trackIndex=track_index + 1,
-            audioTrackFormat=track_format,
-            audioPackFormat=pack_format,
-        )
-        self.adm.addAudioTrackUID(track_uid)
-
-        audio_object = AudioObject(
-            audioObjectName=name,
-            audioPackFormats=[pack_format],
-            audioTrackUIDs=[track_uid],
-        )
-        self.adm.addAudioObject(audio_object)
-
-        if parent is DEFAULT:
-            parent = self.item_parent
-        if parent is not None:
-            parent.audioObjects.append(audio_object)
-
-        self.last_object = audio_object
-        self.last_pack_format = pack_format
-        self.last_stream_format = stream_format
-
-        return self.MonoItem(
-            channel_format=channel_format,
-            track_format=track_format,
-            pack_format=pack_format,
-            stream_format=stream_format,
-            track_uid=track_uid,
-            audio_object=audio_object,
+            track_indices=[track_index],
+            name=name,
+            block_formats=[block_formats],
             parent=parent,
         )
+
+        self.last_pack_format = item.pack_format
+        self.last_stream_format = item.stream_format
+
+        return item
 
     def create_item_objects(self, *args, **kwargs):
         """Create ADM components needed to represent an object channel.
@@ -333,3 +405,230 @@ class ADMBuilder(object):
         Wraps :func:`create_item_mono` with ``type=TypeDefinition.DirectSpeakers``.
         """
         return self.create_item_mono(TypeDefinition.DirectSpeakers, *args, **kwargs)
+
+    def create_format_multichannel(self, type, name, block_formats):
+        """Create ADM components representing a multi-channel format.
+
+        Args:
+            type (TypeDefinition): type of channelFormat and packFormat
+            name (str): name used for all components
+            block_formats (list[list[AudioBlockFormat]]): list of audioBlockFormats
+                for each audioChannelFormat
+
+        Returns:
+            Format: the created components
+        """
+        channel_formats = []
+        stream_formats = []
+        track_formats = []
+
+        for i, channel_block_formats in enumerate(block_formats):
+            channel_name = f"{name}_{i + 1}" if len(block_formats) > 1 else name
+
+            channel_format = AudioChannelFormat(
+                audioChannelFormatName=channel_name,
+                type=type,
+                audioBlockFormats=channel_block_formats,
+            )
+            self.adm.addAudioChannelFormat(channel_format)
+            channel_formats.append(channel_format)
+
+            stream_format = AudioStreamFormat(
+                audioStreamFormatName=channel_name,
+                format=FormatDefinition.PCM,
+                audioChannelFormat=channel_format,
+            )
+            self.adm.addAudioStreamFormat(stream_format)
+            stream_formats.append(stream_format)
+
+            track_format = AudioTrackFormat(
+                audioTrackFormatName=channel_name,
+                audioStreamFormat=stream_format,
+                format=FormatDefinition.PCM,
+            )
+            self.adm.addAudioTrackFormat(track_format)
+            track_formats.append(track_format)
+
+        pack_format = AudioPackFormat(
+            audioPackFormatName=name,
+            type=type,
+            audioChannelFormats=channel_formats[:],
+        )
+        self.adm.addAudioPackFormat(pack_format)
+
+        return self.Format(
+            channel_formats=channel_formats,
+            track_formats=track_formats,
+            pack_format=pack_format,
+            stream_formats=stream_formats,
+        )
+
+    def create_item_multichannel_from_format(
+        self,
+        format,
+        track_indices,
+        name,
+        parent=DEFAULT,
+    ):
+        """Create ADM components representing a multi-channel object,
+        referencing an existing format structure.
+
+        Args:
+            format (Format): format components to reference
+            track_indices (list[int]): zero-based indices of the tracks in the BWF file.
+            name (str): name used for all components
+            parent (Union[AudioContent, AudioObject]): parent of the created audioObject
+                defaults to the last content or explicitly created object
+
+        Returns:
+            Item: the created components
+        """
+        if len(track_indices) != len(format.track_formats):
+            raise ValueError(
+                "track_indices and format must have the same number of channels"
+            )
+
+        track_uids = []
+
+        for i, (track_index, track_format) in enumerate(
+            zip(track_indices, format.track_formats)
+        ):
+            track_uid = AudioTrackUID(
+                trackIndex=track_index + 1,
+                audioTrackFormat=track_format,
+                audioPackFormat=format.pack_format,
+            )
+            self.adm.addAudioTrackUID(track_uid)
+            track_uids.append(track_uid)
+
+        audio_object = AudioObject(
+            audioObjectName=name,
+            audioPackFormats=[format.pack_format],
+            audioTrackUIDs=track_uids[:],
+        )
+        self.adm.addAudioObject(audio_object)
+
+        if parent is DEFAULT:
+            parent = self.item_parent
+        if parent is not None:
+            parent.audioObjects.append(audio_object)
+
+        self.last_object = audio_object
+        self.last_pack_format = format.pack_format
+
+        return self.Item(
+            format=format,
+            track_uids=track_uids,
+            audio_object=audio_object,
+            parent=parent,
+        )
+
+    def create_item_multichannel(
+        self,
+        type,
+        track_indices,
+        name,
+        block_formats,
+        parent=DEFAULT,
+    ):
+        """Create ADM components representing a multi-channel object.
+
+        Args:
+            type (TypeDefinition): type of channelFormat and packFormat
+            track_indices (list[int]): zero-based indices of the tracks in the BWF file.
+            name (str): name used for all components
+            parent (Union[AudioContent, AudioObject]): parent of the created audioObject
+                defaults to the last content or explicitly created object
+            block_formats (list[list[AudioBlockFormat]]): list of audioBlockFormats
+                for each audioChannelFormat
+
+        Returns:
+            Item: the created components
+        """
+        if len(track_indices) != len(block_formats):
+            raise ValueError("track_indices and block_formats must be the same length")
+
+        format = self.create_format_multichannel(
+            type=type,
+            name=name,
+            block_formats=block_formats,
+        )
+
+        return self.create_item_multichannel_from_format(
+            format=format,
+            track_indices=track_indices,
+            name=name,
+            parent=parent,
+        )
+
+    def create_format_hoa(
+        self,
+        orders,
+        degrees,
+        name,
+        **kwargs,
+    ):
+        """Create ADM components representing the format of a HOA stream.
+
+        Args:
+            orders (list[int]): order for each track
+            degrees (list[int]): degree for each track
+            name (str): name used for all components
+            kwargs: arguments for :class:`.AudioBlockFormatHoa`
+
+        Returns:
+            Format: the created components
+        """
+        block_formats = [
+            [
+                AudioBlockFormatHoa(
+                    order=order,
+                    degree=degree,
+                    **kwargs,
+                )
+            ]
+            for order, degree in zip(orders, degrees)
+        ]
+
+        return self.create_format_multichannel(
+            type=TypeDefinition.HOA,
+            name=name,
+            block_formats=block_formats,
+        )
+
+    def create_item_hoa(
+        self,
+        track_indices,
+        orders,
+        degrees,
+        name,
+        parent=DEFAULT,
+        **kwargs,
+    ):
+        """Create ADM components representing a HOA stream.
+
+        Args:
+            track_indices (list[int]): zero-based indices of the tracks in the BWF file.
+            orders (list[int]): order for each track
+            degrees (list[int]): degree for each track
+            name (str): name used for all components
+            parent (Union[AudioContent, AudioObject]): parent of the created audioObject
+                defaults to the last content or explicitly created object
+            kwargs: arguments for :class:`.AudioBlockFormatHoa`
+
+        Returns:
+            Item: the created components
+        """
+        format = self.create_format_hoa(
+            orders=orders,
+            degrees=degrees,
+            name=name,
+            **kwargs,
+        )
+
+        return self.create_item_multichannel_from_format(
+            format=format,
+            track_indices=track_indices,
+            name=name,
+            parent=parent,
+        )
