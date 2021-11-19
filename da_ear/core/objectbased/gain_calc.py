@@ -28,7 +28,9 @@ def coord_trans(position):
     if isinstance(position, ObjectPolarPosition):
         return cart(position.azimuth, position.elevation, position.distance)
     elif isinstance(position, ObjectCartesianPosition):
-        return np.clip(position.as_cartesian_array(), -1, 1)
+        #return np.clip(position.as_cartesian_array(), -1, 1)
+        asarray = position.as_cartesian_array()
+        return asarray / np.max(np.abs(asarray),axis=0) #scale instead of clip
     else:
         assert False, "position should be ObjectPolarPosition or ObjectCartesianPosition"  # pragma: no cover
 
@@ -418,6 +420,8 @@ class GainCalc(object):
         #gains /= object_distance
         if object_distance > 0 and not math.isnan(object_distance) and not math.isinf(object_distance):
             gains /= object_distance
+        if object_distance ==0:
+            gains /= 10 # announcer and system sounds, let's tone it down a bit...
         #print(gains)
 
         # add in silent LFE channels
