@@ -60,6 +60,8 @@ class InterpretObjectMetadata(InterpretTimingMetadata):
             interp_from = None
 
         interp_to = self.calc_gains(block)
+        
+        #print(interp_to)
 
         start_sample = start_time * sample_rate
         end_sample = end_time * sample_rate

@@ -1,4 +1,5 @@
 from collections import namedtuple
+import math
 import numpy as np
 import warnings
 from . import allo_extent, extent
@@ -364,7 +365,7 @@ class GainCalc(object):
         block_format = object_meta.block_format
 
         position = coord_trans(block_format.position)
-
+        
         position = self.screen_scale_handler.handle(position, block_format.screenRef,
                                                     object_meta.extra_data.reference_screen,
                                                     block_format.cartesian)
@@ -373,7 +374,12 @@ class GainCalc(object):
                                                                block_format.position.screenEdgeLock,
                                                                block_format.cartesian)
 
+        object_distance = 1.0;
+
         if block_format.cartesian:
+            
+            object_distance = math.sqrt(block_format.position.X*block_format.position.X+block_format.position.Y*block_format.position.Y+block_format.position.Z*block_format.position.Z)
+        
             excluded = allocentric.get_excluded(
                 self.allo_channel_positions,
                 self.zone_exclusion_handler.get_excluded(block_format.zoneExclusion))
@@ -393,6 +399,8 @@ class GainCalc(object):
 
             extent_pan = self.polar_extent_panner.handle
 
+        #print(object_distance)
+
         diverged_gains, diverged_positions = diverge(position, block_format.objectDivergence, block_format.cartesian)
 
         gains_for_each_pos = np.apply_along_axis(extent_pan, 1, diverged_positions,
@@ -406,6 +414,11 @@ class GainCalc(object):
         gains = np.nan_to_num(gains)
 
         gains *= block_format.gain
+        #print(gains)
+        #gains /= object_distance
+        if object_distance > 0 and not math.isnan(object_distance) and not math.isinf(object_distance):
+            gains /= object_distance
+        #print(gains)
 
         # add in silent LFE channels
         gains_full = np.zeros(len(self.is_lfe))

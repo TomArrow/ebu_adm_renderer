@@ -1,9 +1,9 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='ear',
-    description='EBU ADM Renderer',
-    version='2.0.0',
+    name='da-ear',
+    description='EBU ADM Renderer (distance aware)',
+    version='0.01',
 
     url='https://github.com/ebu/ebu_adm_renderer',
 
@@ -41,19 +41,19 @@ setup(
     packages=find_packages(),
 
     package_data={
-        "ear.test": ["data/*.yaml", "data/*.wav"],
-        "ear.core": ["data/*.yaml", "data/*.dat"],
-        "ear.core.test": ["data/psp_pvs/*.npz"],
-        "ear.core.objectbased.test": ["data/gain_calc_pvs/*"],
-        "ear.fileio.adm": ["data/*.xml"],
-        "ear.fileio.adm.test": ["test_adm_files/*.xml"],
-        "ear.fileio.bw64.test": ["test_wav_files/*.wav"],
+        "da_ear.test": ["data/*.yaml", "data/*.wav"],
+        "da_ear.core": ["data/*.yaml", "data/*.dat"],
+        "da_ear.core.test": ["data/psp_pvs/*.npz"],
+        "da_ear.core.objectbased.test": ["data/gain_calc_pvs/*"],
+        "da_ear.fileio.adm": ["data/*.xml"],
+        "da_ear.fileio.adm.test": ["test_adm_files/*.xml"],
+        "da_ear.fileio.bw64.test": ["test_wav_files/*.wav"],
     },
 
     entry_points={
         'console_scripts': [
-            'ear-render = ear.cmdline.render_file:main',
-            'ear-utils = ear.cmdline.utils:main'
+            'da-ear-render = da_ear.cmdline.render_file:main',
+            'da-ear-utils = da_ear.cmdline.utils:main'
         ]
     },
 )

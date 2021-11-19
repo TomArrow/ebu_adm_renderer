@@ -241,7 +241,7 @@ def parse_command_line():
 
 def main():
     args = parse_command_line()
-
+	
     with error_handler(logger, debug=args.debug, strict=args.strict):
         OfflineRenderDriver.from_args(args).run(args.input_file, args.output_file)
 
